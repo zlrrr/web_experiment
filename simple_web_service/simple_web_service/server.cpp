@@ -20,13 +20,7 @@ int _cdecl main() {
 	char recvbuf[DEFAULT_BUFFER_LEN];
 	char sendbuf[DEFAULT_BUFFER_LEN];
 
-	//sprintf(sendbuf,
-	//	"<p>I am not really sure whether your answer is right.</p>\n"
-	//	"<p>You should probably try again.</p>\n");
-
-	//int sendbuflen = strlen(sendbuf);
-	//printf("send size :%d\n %s", sendbuflen,sendbuf);
-
+	//初始化winsock
 	iResult = WSAStartup(MAKEWORD(2,2),&wsadata);
 	if (iResult != 0) {
 		printf("WSAstartup failed: %d\n", iResult);
@@ -41,6 +35,7 @@ int _cdecl main() {
 	hints.ai_protocol = IPPROTO_TCP;
 	hints.ai_flags = AI_PASSIVE;
 
+	//根据初始信息获取地址和端口
 	iResult = getaddrinfo(NULL, DEFAULT_PORT, &hints, &result);
 	if (iResult != 0) {
 		printf("getaddrinfo failed: %d\n", iResult);
@@ -51,6 +46,7 @@ int _cdecl main() {
 		printf("getaddrinfo OK\n");
 	}
 
+	//创建socket用于监听
 	ListenSocket = socket(result->ai_family, result->ai_socktype, result->ai_protocol);
 
 	if(ListenSocket == INVALID_SOCKET){
@@ -63,6 +59,7 @@ int _cdecl main() {
 		printf("socket create OK\n");
 	}
 
+	//绑定端口和地址
 	iResult = bind(ListenSocket, result->ai_addr, (int)result->ai_addrlen);
 	if (iResult == SOCKET_ERROR) {
 		printf("bind failed with error: %d\n", WSAGetLastError());
@@ -76,6 +73,7 @@ int _cdecl main() {
 	}
 	freeaddrinfo(result);
 
+	//开始监听
 	if (listen(ListenSocket, SOMAXCONN) == SOCKET_ERROR) {
 		printf("Listen failed with error: %d\n", WSAGetLastError());
 		closesocket(ListenSocket);
@@ -86,6 +84,7 @@ int _cdecl main() {
 		printf("starting listening\n");
 	}
 
+	//输出ip地址等信息
 	printf("this is web service,hello!\n");
 	hostent* localHost;
 	char* localIP;
@@ -93,7 +92,9 @@ int _cdecl main() {
 	localIP = inet_ntoa(*(struct in_addr *)*localHost->h_addr_list);
 	printf("the ip address is: %s\n\n\n", localIP);
 
+	//循环接收客户端请求
 	while(1) {
+		//创建socket用于连接客户端
 		SOCKET ClientSocket = INVALID_SOCKET;
 		ClientSocket = accept(ListenSocket, NULL, NULL);
 		if (ClientSocket == INVALID_SOCKET) {
@@ -106,6 +107,7 @@ int _cdecl main() {
 			printf("got new client request\n");
 		}
 
+		//接收从客户端发来的信息
 		int iRecvResult = 0;
 		memset(recvbuf, 0, sizeof(recvbuf));
 		iRecvResult = recv(ClientSocket, recvbuf, recvbuflen, 0);
@@ -123,13 +125,16 @@ int _cdecl main() {
 			memset(method, 0, sizeof(method));
 			memset(file_addr, 0, sizeof(file_addr));
 			memset(html_addr, 0, sizeof(html_addr));
+			
+			//切分信息字段，识别请求方法
 			ptr = strtok(recvbuf," ");
 			for (index1 = 0;*(ptr+index1)!='\0';index1++) {
 				method[index1] = *(ptr+index1);
 			}
 			method[index1] = '\0';
 			printf("method: %s\n",method);
-			
+	
+			//切分信息字段，识别页面地址
 			ptr = strtok(NULL," ");
 			for (index2 = 0; *(ptr + index2) != '\0'; index2++) {
 				file_addr[index2] = *(ptr + index2);
@@ -143,8 +148,10 @@ int _cdecl main() {
 			}
 			printf("file address: %s\n", html_addr);
 
+			//根据页面地址，寻找文件
 			FILE *request_page = fopen(html_addr, "rb");
 
+			//若文件不存在，返回404页面
 			if (request_page == NULL) {
 				memset(sendbuf, 0, sizeof(sendbuf));
 				sprintf(sendbuf, "<HTML><TITLE>404 Not Found</TITLE>\r\n"
@@ -160,6 +167,7 @@ int _cdecl main() {
 				}
 			}
 			else {
+				//若存在页面，则发送反馈给客户端
 				int flag = 0;
 				while (flag == 0)
 				{
@@ -190,6 +198,7 @@ int _cdecl main() {
 			return 1;
 		}
 	
+		//一次响应结束之后，就关闭当前连接
 		iResult = shutdown(ClientSocket, SD_SEND);
 		if (iResult == SOCKET_ERROR) {
 			printf("shutdown failed: %d\n", WSAGetLastError());
@@ -203,6 +212,7 @@ int _cdecl main() {
 		}
 	}
 
+	//关闭监听端口，清理winsock
 	closesocket(ListenSocket);
 	WSACleanup();
 
